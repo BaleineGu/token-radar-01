@@ -1,10 +1,19 @@
-// Launch Radar — comps-1 (Node 22, standard library only).
+// Launch Radar — comps-1, v3 (Node 22, standard library only).
 //
 // Reads the sealed snapshot at /input/snapshot.json (or --input <file|dir>),
 // prices every pre-token protocol with the comps-fitted model in lib/model.ts,
 // writes the ranked board to /output/board.json, the dashboard's data to
 // /output/data.js, copies dashboard/ and screenshots/ to /output, and writes
 // /output/dossier.json with the vendored make.fun library.
+//
+// v3 fixes the run that rejected v2: the repository still held a stale
+// screenshot from v1 (screenshots/3-filtered.png), so the run copied five
+// images into /output and buildDossier — which takes at most four — threw
+// and the grade run failed. The screenshot copy now takes at most the cap,
+// in name order, and warns about any extra it skips, so a stale file left
+// in the repository can no longer kill the run. Delete the stale file from
+// the repository as well; this guard is the second line of defence, not
+// the first.
 //
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../input/snapshot.json
@@ -66,20 +75,70 @@ function copyFiles(from: string, to: string): string[] {
 }
 
 copyFiles(join(here, 'dashboard'), join(out, 'dashboard'));
-const shots = copyFiles(join(here, 'screenshots'), join(out, 'screenshots'));
+
+/**
+ * Copy the screenshots, at most the scorer's cap, in name order. A
+ * repository that kept a stale image from an earlier version of the entry
+ * must not kill the run: extras past the cap are skipped with a warning
+ * instead of being handed to buildDossier, which refuses more than the cap.
+ * Each copied file is also checked here — name, size and PNG/JPEG magic —
+ * so a bad image fails with a plain message, not a library stack trace.
+ */
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const JPEG_MAGIC = [0xff, 0xd8, 0xff];
+function copyScreenshots(from: string, to: string): string[] {
+  if (!existsSync(from)) return [];
+  mkdirSync(to, { recursive: true });
+  const names = readdirSync(from)
+    .filter((name) => !name.startsWith('.'))
+    .filter((name) => {
+      const path = join(from, name);
+      return statSync(path).isFile();
+    })
+    .sort();
+  const skipped = names.slice(SCREENSHOT_CAPS.max);
+  for (const name of skipped) {
+    process.stderr.write(`launch radar: skipping screenshots/${name}: the scorer takes at most ${SCREENSHOT_CAPS.max} images\n`);
+  }
+  const kept = names.slice(0, SCREENSHOT_CAPS.max);
+  for (const name of kept) {
+    if (!IMAGE_NAME.test(name)) {
+      process.stderr.write(`launch radar: screenshots/${name}: a name is letters, digits and . _ -, 1 to 128 characters\n`);
+      process.exit(1);
+    }
+    const bytes = readFileSync(join(from, name));
+    if (bytes.length > SCREENSHOT_CAPS.max_bytes) {
+      process.stderr.write(`launch radar: screenshots/${name} is ${bytes.length} bytes, over the ${SCREENSHOT_CAPS.max_bytes} the scorer takes\n`);
+      process.exit(1);
+    }
+    const isPng = PNG_MAGIC.every((b, i) => bytes[i] === b);
+    const isJpeg = JPEG_MAGIC.every((b, i) => bytes[i] === b);
+    if (!isPng && !isJpeg) {
+      process.stderr.write(`launch radar: screenshots/${name} is neither a whole PNG nor a JPEG\n`);
+      process.exit(1);
+    }
+    copyFileSync(join(from, name), join(to, name));
+  }
+  return kept;
+}
+
+const shots = copyScreenshots(join(here, 'screenshots'), join(out, 'screenshots'));
 if (shots.length < 3) {
   process.stderr.write(`launch radar: screenshots/ holds ${shots.length} image${shots.length === 1 ? '' : 's'}: hand in 3, the board, a detail view and a filtered view\n`);
   process.exit(1);
 }
-for (const name of shots) {
-  if (!IMAGE_NAME.test(name)) {
-    process.stderr.write(`launch radar: screenshots/${name}: a name is letters, digits and . _ -, 1 to 128 characters\n`);
-    process.exit(1);
-  }
-}
 
 // The dossier is written last: the scorer rebuilds it from this /output.
-writeFileSync(join(out, 'dossier.json'), buildDossier(out, { text_max_bytes: TEXT_MAX_BYTES, screenshots: SCREENSHOT_CAPS, dashboard: { max_files: 400, max_bytes: 4_194_304 } }));
+// A dossier failure is reported in plain words instead of a stack trace,
+// so a failed grade run says what broke.
+let dossier: Uint8Array;
+try {
+  dossier = buildDossier(out, { text_max_bytes: TEXT_MAX_BYTES, screenshots: SCREENSHOT_CAPS, dashboard: { max_files: 400, max_bytes: 4_194_304 } });
+} catch (err) {
+  process.stderr.write(`launch radar: the dossier could not be built: ${err instanceof Error ? err.message : String(err)}\n`);
+  process.exit(1);
+}
+writeFileSync(join(out, 'dossier.json'), dossier);
 
 const top = board[0]!;
 process.stdout.write(

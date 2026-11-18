@@ -5,10 +5,15 @@
 # Launch Radar: comps-fitted value tested out of sample, every farm plan netted to the dollar
 
 A token launch radar for the make.fun bounty `token-radar-01` ($1,325, top 10
-paid, deadline 2026-12-14T10:00:00Z), by @guinrm. This is the v2 rebuild:
+paid, deadline 2026-12-14T10:00:00Z), by @guinrm. This is the v3 rebuild:
 the v1 entry ranked the same 198 protocols with a hand-tuned formula and
-scored 88.70%; this version replaces the formula with a fitted model and
-shows its validation on the board.
+scored 88.70%; v2 replaced the formula with a fitted model and showed its
+validation on the board, but its grade run failed — the repository still
+held a stale v1 screenshot, so five images reached the dossier builder,
+which takes at most four. v3 keeps the v2 model and board unchanged and
+fixes the run: the screenshot copy now takes at most four images, in name
+order, and warns about any extra it skips (and the stale file is deleted
+from the repository as well).
 
 ## What it does
 
