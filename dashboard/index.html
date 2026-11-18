@@ -1,14 +1,108 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Token Radar — pre-token protocols ranked by implied value</title>
+<title>Launch Radar — comps-1</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<a class="skip" href="#board">Skip to the board</a>
-<main id="board" tabindex="-1" aria-busy="true"></main>
+<header class="top">
+  <div class="brand">
+    <div class="mark">◉</div>
+    <div>
+      <h1>Launch Radar <span class="ver">comps-1</span></h1>
+      <p class="sub">Pre-token protocols, priced off the tokens that already trade. Snapshot 14 Nov 2026 · 758 protocols · model fitted on 93 traded comps, one per ticker.</p>
+    </div>
+  </div>
+  <div class="statstrip" id="stats"></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="board" class="on">Board</button>
+  <button data-tab="validation">How it was tested</button>
+  <button data-tab="live">Live tokens</button>
+</nav>
+
+<main>
+  <section id="tab-board">
+    <div class="controls">
+      <input id="q" type="search" placeholder="Search name or slug…" aria-label="Search">
+      <select id="fcat" aria-label="Category"><option value="">All categories</option></select>
+      <select id="fchain" aria-label="Chain"><option value="">All chains</option></select>
+      <select id="fverdict" aria-label="Verdict">
+        <option value="">All verdicts</option>
+        <option value="FARM">FARM</option>
+        <option value="MARGINAL">MARGINAL</option>
+        <option value="SKIP">SKIP</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="fwatch"> Watchlist only</label>
+      <select id="sort" aria-label="Sort by">
+        <option value="implied">Sort: implied value</option>
+        <option value="tvl">Sort: TVL</option>
+        <option value="change">Sort: 7-day change</option>
+        <option value="age">Sort: age</option>
+        <option value="odds">Sort: launch odds</option>
+        <option value="net">Sort: net per plan</option>
+      </select>
+    </div>
+    <p class="count" id="count"></p>
+    <div class="tablewrap">
+      <table id="board">
+        <thead><tr>
+          <th>#</th><th>Protocol</th><th>Category</th><th>Chains</th>
+          <th class="num">TVL</th><th class="num">7d</th><th class="num">Age</th>
+          <th class="num">Implied</th><th class="num">P25–P75</th>
+          <th class="num">Odds</th><th>Verdict</th><th class="num">Net / plan</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="pager"><button id="prev">← Prev</button><span id="pageinfo"></span><button id="next">Next →</button></div>
+    <p class="note">Implied value is the fitted curve's point estimate; P25–P75 is the leave-one-out range. Net is the expected dollars on the plan's deposit after gas, at the stated farmer share. “Records no token” means the snapshot carries no market cap, CoinGecko id or symbol for it — not proof it has none.</p>
+  </section>
+
+  <section id="tab-validation" hidden>
+    <h2>How it was tested — before any row was ranked</h2>
+    <p class="lede">The value curve is a ridge regression of log market cap on log TVL, breadth, age and seven-day growth, with one coefficient per large category, fitted on the 93 traded protocols in this snapshot (one per ticker, bridges / liquid staking / CEX left out — they price like custody, not like a launch). Every number below is computed from those comps, not asserted.</p>
+    <div class="validgrid">
+      <div class="card"><h3>Leave-one-out</h3><p class="big" id="v-loo"></p><p id="v-loo-note"></p></div>
+      <div class="card"><h3>Walk-forward</h3><p class="big" id="v-wf"></p><p id="v-wf-note"></p></div>
+      <div class="card"><h3>Launch odds</h3><p class="big" id="v-odds"></p><p id="v-odds-note"></p></div>
+      <div class="card"><h3>Range holds</h3><p class="big" id="v-range"></p><p id="v-range-note"></p></div>
+    </div>
+    <h3>Fitted coefficients</h3>
+    <table class="small" id="coefs"><thead><tr><th>Term</th><th class="num">Coefficient</th><th>What it means</th></tr></thead><tbody></tbody></table>
+    <h3>Leave-one-out miss by size band</h3>
+    <table class="small" id="loo-bands"><thead><tr><th>TVL band</th><th class="num">Comps</th><th class="num">Median miss</th></tr></thead><tbody></tbody></table>
+    <h3>Launch-odds calibration by age band</h3>
+    <table class="small" id="odds-cal"><thead><tr><th>Age band</th><th class="num">Protocols</th><th class="num">Actually record a token</th><th class="num">Model predicted</th></tr></thead><tbody></tbody></table>
+    <h3>Model sandbox</h3>
+    <p class="lede">The board does not move — the sandbox only re-prices the top row under your own assumptions, so you can see what the verdict is sensitive to.</p>
+    <div class="sandbox">
+      <label>Farmer share of implied value <input type="range" id="sb-share" min="5" max="20" step="1" value="15"> <span id="sb-share-v">15%</span></label>
+      <label>Gas per Ethereum transaction <input type="range" id="sb-gas" min="2" max="30" step="1" value="12"> $<span id="sb-gas-v">12</span></label>
+      <p id="sb-out"></p>
+    </div>
+    <h3>Method, in one paragraph</h3>
+    <p class="lede">Each row's implied value is exp(intercept + 0.33·log TVL + …) from the fitted curve; its range is the leave-one-out residual quartiles applied to that point estimate. Launch odds come from a logistic fit on age and size over all 758 protocols. A farm plan's expected gross is odds × 15% × implied × deposit ÷ TVL; net subtracts gas (six transactions at the chain's estimated cost) and $4.10 of opportunity cost. FARM means net ≥ $10 on the plan's deposit, MARGINAL means net ≥ $0, anything else is SKIP. Gas costs and the 15% farmer share are stated estimates, not market data — change them in the sandbox and watch the verdict move.</p>
+  </section>
+
+  <section id="tab-live" hidden>
+    <h2>Live tokens, set aside</h2>
+    <p class="lede">The 24 largest protocols that already record a token, shown at the market's own value — never a model's. They anchor the fitted curve; they are never ranked on it.</p>
+    <div class="tablewrap"><table class="small" id="livetab">
+      <thead><tr><th>Protocol</th><th>Category</th><th class="num">TVL</th><th class="num">Market cap</th><th class="num">MCap / TVL</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+</main>
+
+<aside id="drawer" hidden>
+  <button id="drawer-close" aria-label="Close">✕</button>
+  <div id="drawer-body"></div>
+</aside>
+
 <script src="../data.js"></script>
 <script src="app.js"></script>
 </body>
